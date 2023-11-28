@@ -47,6 +47,12 @@ df <- df[,-26]
 
 # Pre_PTT: 1 missing, we can impute i guess using domain knowledge
 
+### Creating 24hr blood product variables ###
+df <- df %>% mutate('Total 24hr Plt' = Intra_Platelets + Plt.0.24hrs) %>%
+             mutate('Total 24hr FFP' = Intra_Fresh.Frozen.Plasma + FFP.0.24hrs) %>%
+             mutate('Total 24hr Cryo' = Intra_Cryoprecipitate + Cryo.0.24hrs)
+
+
 ### EDA REPORT EXPORTED ###
 library(DataExplorer)
 create_report(df)
