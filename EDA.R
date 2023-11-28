@@ -77,9 +77,11 @@ new_LAS_scores <- df_complete[,17]
 
 # Insert new LAS scores
 df$`LAS score` <- new_LAS_scores
-# Duration of ICU stays: 1 missing, we can just remove pt
+# Duration of ICU stays: 1 missing, mean impute
+mean_icu <- mean(df$`Duration of ICU Stay (days)`, na.rm = TRUE)
+df$`Duration of ICU Stay (days)` <- ifelse(is.na(df$`Duration of ICU Stay (days)`), mean_icu, df$`Duration of ICU Stay (days)`)
 
-# Pre_PTT: 1 missing, we can impute i guess using domain knowledge
+# Pre_PTT: 1 missing, mean impute
 mean_pre_ptt <- mean(df$Pre_PTT, na.rm = TRUE)
 df$Pre_PTT <- ifelse(is.na(df$Pre_PTT), mean_pre_ptt, df$Pre_PTT)
 
