@@ -38,10 +38,13 @@ df[, 42:56] <- replace(df[, 42:56], is.na(df[, 42:56]), 0)
 # Now evaluate missing data
 
 colSums(is.na(df))
-# Fibrinogen: 97.4% missing, can we impute using domain knowledge?
+# Fibrinogen: 97.4% missing, remove
+df <- df[,-26]
 # Death Date and Survival Time: 83.33% missing, no worries this is systematic
 # LAS score is 6.25% missing, imputation?
+
 # Duration of ICU stays: 1 missing, we can just remove pt
+
 # Pre_PTT: 1 missing, we can impute i guess using domain knowledge
 
 ### EDA REPORT EXPORTED ###
