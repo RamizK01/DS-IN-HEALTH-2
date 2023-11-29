@@ -47,8 +47,6 @@ library(missForest)
 imp_df <- as.data.frame(imp_df)
 imp_df <- missForest(imp_df)$ximp
 
-df1 <- df
-
 # Pre_PTT: 1 missing, mean impute
 mean_pre_ptt <- mean(df$Pre_PTT, na.rm = TRUE)
 df$Pre_PTT <- ifelse(is.na(df$Pre_PTT), mean_pre_ptt, df$Pre_PTT)
