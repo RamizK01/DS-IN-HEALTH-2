@@ -17,6 +17,13 @@ names(df) <- gsub("-", "_", names(df))
 names(df) <- gsub("[[:punct:]]", "_", names(df))
 names(df) <- gsub(" ", "_", names(df))
 
+## add as factor and as numeric 
+# Convert all character columns to factors
+df[sapply(df, is.character)] <- lapply(df[sapply(df, is.character)], as.factor)
+
+df[sapply(df, function(x) is.integer(x) || is.double(x))] <- lapply(df[sapply(df, function(x) is.integer(x) || is.double(x))], as.numeric)
+
+
 # Random Forest for Total 24hr Plt
 rf_Plt <- randomForest(`Total_24hr_Plt` ~ ., data = df, na.action = na.omit)
 
@@ -47,4 +54,5 @@ varImpPlot(rf_Plt, main = "Variable Importance for Total 24hr Plt")
 varImpPlot(rf_FFP, main = "Variable Importance for Total 24hr FFP")
 varImpPlot(rf_Cryo, main = "Variable Importance for Total 24hr Cryo")
 varImpPlot(rf_RBC, main = "Variable Importance for Total 24hr RBC")
+
 
