@@ -2,11 +2,7 @@
 
 # Decision Trees: 
 
-# Installing packages and loading into library: 
-install.packages("rpart")
-install.packages("rpart.plot")
-install.packages("tree")
-install.packages("dplyr")
+# Loading packages into library: 
 library(rpart)
 library(rpart.plot)
 library(tree)
