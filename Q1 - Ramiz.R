@@ -5,6 +5,9 @@
 df <- read.csv('cleaned_transfusion_data.csv')
 
 library(glmnet)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
 set.seed(123)
 
 # create df_bin, bin stands for binary classification
@@ -14,7 +17,7 @@ df <- df %>% mutate("RBC_tfsd" = case_when(`Total.24hr.RBC` == 0 ~ 0, TRUE ~ 1))
              mutate("Cryo_tfsd" = case_when(`Total.24hr.Cryo` == 0 ~ 0, TRUE ~ 1))
   
 ### THIS DF WILL ONLY WORK FOR RBC, NEED TO ADD NEW COLUMNS 64:66 FOR PLT, FFP, CRYO
-df_bin <- df[,c(3:26,28,29,63)]
+df_bin <- df[,c(3:26,28,29,63:66)]
 
 correlation_matrix <- cor(df_bin)
 find_high_correlations <- function(cor_matrix, threshold) {
@@ -32,7 +35,7 @@ threshold <- 0.7
 high_corr_pairs <- find_high_correlations(correlation_matrix, threshold)
 print(high_corr_pairs)
 
-library(ggplot2)
+
 
 # heatmap
 ggplot(data = melt(correlation_matrix), aes(Var1, Var2, fill = value)) +
@@ -43,6 +46,37 @@ ggplot(data = melt(correlation_matrix), aes(Var1, Var2, fill = value)) +
 
 df_bin[c(1, 2, 7:16, 25:26)] <- lapply(df_bin[c(1, 2, 7:16, 25:26)], factor)
 
+######################################################
+### LASSO MODEL FOR PREDICTING MASSIVE TRANSFUSION ###
+######################################################
+df_massive <- df[,c(3:26,28,29,58)]
+df_massive[c(1, 2, 7:16, 25:26)] <- lapply(df_massive[c(1, 2, 7:16, 25:26)], factor)
+library(pROC)
+library(glmnet)
+train.set <- sample(nrow(df_massive),round(nrow(df_bin)*.7))
+
+# train predictor 
+x.train <- model.matrix(Massive.Transfusion ~.,df_massive)[train.set,-1]
+# train response
+y.train <- df_massive$Massive.Transfusion[train.set]
+# Perform cross-validation for lambda selection
+cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
+                      type.measure = "auc")
+
+lambda_optimal <- cv.lasso$lambda.min
+lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
+                      lambda = lambda_optimal)
+
+# predict
+pred.lasso <- as.numeric(predict(lasso.model, 
+                                 newx = model.matrix(Massive.Transfusion ~.,df_massive)
+                                 [-train.set,-1], s=cv.lasso$lambda.min,
+                                 type = "response"))
+
+# create ROC curve
+myroc <- roc(Massive.Transfusion ~ pred.lasso, data=df_massive[-train.set,])
+auc.lasso <- myroc$auc
+plot(myroc)
 
 
 ################################################################
@@ -76,8 +110,6 @@ auc.lasso <- myroc$auc
 plot(myroc)
 
 ### WE SHOULD REALLY BOOTSTRAP THE LASSO ###
-library(SparseLearner)
-bstrap.lasso.model <- BRLasso(x, y, B = 5, Boots = 100, kfold = 10, seed = 0123)
 
 
 ################################################################
