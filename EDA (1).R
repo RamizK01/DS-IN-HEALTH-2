@@ -66,6 +66,8 @@ data()
 
 # QUESTION 2: 
 
+df$Survival_Time <- ifelse(is.na(df$Survival_Time), 365, df$Survival_Time )
+
 data1$ALIVE_30DAYS_YN <- as.factor(data1$ALIVE_30DAYS_YN)
 data1$ALIVE_30DAYS_YN <- ifelse(data1$ALIVE_30DAYS_YN == "Y", 1, 0)
 data1$ALIVE_90DAYS_YN <- as.factor(data1$ALIVE_90DAYS_YN)
@@ -78,52 +80,91 @@ df$DEATH_DATE <- as.numeric(df$DEATH_DATE)
 df$DEATH_DATE <- ifelse(is.na(df$DEATH_DATE), 0, 1)
 
 
-surv1 <- Surv(df$Survival_Time, !is.na(df$DEATH_DATE))
+df$RBC_tfsd <- as.factor(df$RBC_tfsd)
 
-# Example with only ECMO and CPB as predictors
-sf1 <- survfit(surv1 ~ ECLS_ECMO + ECLS_CPB, data = df)
+# Survival Curve - Mortality and RBC_tfsd
+
+sf1 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data = df)
 print(sf1)
 
 plot(sf1, col = 1:2)
-legend("bottomright", legend = c("ECMO", "CPB"), lty = 1, col = 1:2) 
-
+legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 
 # typical stratified KM curve
-plot(survfit(surv1 ~ ECLS_ECMO + ECLS_CPB, data=df), fun = "S")
+plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df), fun = "S")
 
 # plot a cloglog plot against log(t)
-plot(survfit(surv1 ~ ECLS_ECMO + ECLS_CPB, data=df), fun = "cloglog")
-
-survdiff(Surv(time, status==1) ~ sex,data=melanoma)
+plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
 
 # Cox PH model
-coxmod1 <- coxph(surv1 ~ ECLS_ECMO + ECLS_CPB, data = df)
+coxmod1 <- coxph(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data = df)
 summary(coxmod1)
 
 cox.zph(coxmod1)
 
+# Survival Curve 2 - Duration of ICU stay based on RBC transfusion. 
+# Can make a composite variable, choosing a cutoff for duration of ICU stay in days for status. 
+# ICU stays longer than 4 are typically considered long
 
+df$Long_ICU_Stay <- ifelse(df$Duration.of.ICU.Stay..days. > 4, 1, 0)
 
-# Have to find probability of survival for each patient at each time point (30 days, 90 days, and 1 year)
-# 160 censored observations. Known that 32 patients died. 
-# Convert variables into factors
+sf2 <- survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data = df)
+print(sf2)
+plot(sf2, col = 1:2, xlim = c(0,20))
 
+legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 
+# typical stratified KM curve
+plot(survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data=df), fun = "S")
+# Doesnt meet PH assumptions 
+# plot a cloglog plot against log(t)
+plot(survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
 
-# Use the characteristics of the patients found in the first question to build cox model
+# Cox PH model
+coxmod2 <- coxph(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data = df)
+summary(coxmod2)
 
-data1$`OR Date` <- as.numeric(data1$`OR Date`)
+cox.zph(coxmod2)
 
-sf1 <- survfit(Surv(`OR Date`, ALIVE_30DAYS_YN == 0) ~ 1, data=data1)
-print(sf)
+# Survival Curve 3 -  Mortality and FFP_tfsd
+sf3 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data = df)
+print(sf1)
 
-sf2 <- survfit(Surv(`OR Date`, ALIVE_90DAYS_YN == 0) ~ 1, data=data1)
+plot(sf3, col = 1:2)
+legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 
-sf3 <- survfit(Surv(`OR Date`, ALIVE_12MTHS_YN == 0) ~ 1, data=data1)
+# typical stratified KM curve
+plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FPP_tfsd, data=df), fun = "S")
 
-plot(sf2,xscale = 365.25, xlab = "years from surgery", ylab="Survival", col=1:2) 
-legend("bottomright", legend = c("female", "male"), lty = 1, col = 1:2) 
+# plot a cloglog plot against log(t)
+plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data=df), fun = "cloglog")
 
-# Then, do coxph for each three models as well. 
+# Cox PH model
+coxmod3 <- coxph(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data = df)
+summary(coxmod3)
 
-# Visualize using kaplan meier curves
+cox.zph(coxmod3)
+
+# Survival curve 4 - Length of Hospital stay
+# Create composite variable for long hospital stay
+# typical for lung transplant patients is 3-4 weeks, so ill choose 30 days as a cutoff
+
+df$Long_Hospital_Stay <- ifelse(df$HOSPITAL_LOS > 30, 1, 0)
+
+sf4 <- survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
+print(sf4)
+plot(sf4, col = 1:2)
+
+legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
+
+# typical stratified KM curve
+plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "S")
+# Doesnt meet PH assumptions 
+# plot a cloglog plot against log(t)
+plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
+
+# Cox PH model
+coxmod4 <- coxph(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
+summary(coxmod4)
+
+cox.zph(coxmod4)
