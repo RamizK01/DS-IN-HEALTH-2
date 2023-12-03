@@ -73,132 +73,156 @@ UB <- Q3 + 1.5 * IQR
 df_bin <- df_bin %>% filter(Pre_PTT >= LB & Pre_PTT <= UB)
 
 
-library(DataExplorer)
-create_report(df_bin)
-
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF RBC TRANSFUSION WILL OCCUR ###
 ################################################################
 df_bin1 <- df_bin[,c(-24,-25,-26)]
-train.set <- sample(nrow(df_bin1),round(nrow(df_bin1)*.7))
+set.seed(123) # for reproducibility
+n_iterations <- 100
+auc_values <- numeric(n_iterations)
 
-# train predictor 
-x.train <- model.matrix(RBC_tfsd ~.,df_bin1)[train.set,-1]
-# train response
-y.train <- df_bin1$RBC_tfsd[train.set]
-# Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
-                      type.measure = "auc")
+for(i in 1:n_iterations) {
+  # Sample the data
+  train.set <- sample(nrow(df_bin1), round(nrow(df_bin1) * 0.7), replace = TRUE)
+  
+  # Train predictor
+  x.train <- model.matrix(RBC_tfsd ~., df_bin1)[train.set, -1]
+  # Train response
+  y.train <- df_bin1$RBC_tfsd[train.set]
+  
+  # Perform cross-validation for lambda selection
+  cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial", type.measure = "auc")
+  
+  lambda_optimal <- cv.lasso$lambda.min
+  lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1, lambda = lambda_optimal)
+  
+  # Predict
+  pred.lasso <- as.numeric(predict(lasso.model, 
+                                   newx = model.matrix(RBC_tfsd ~., df_bin1)[-train.set, -1], 
+                                   s = cv.lasso$lambda.min, 
+                                   type = "response"))
+  
+  # Create ROC curve
+  myroc <- roc(response = df_bin1$RBC_tfsd[-train.set], predictor = pred.lasso)
+  auc_values[i] <- myroc$auc
+}
 
-lambda_optimal <- cv.lasso$lambda.min
-lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
-                      lambda = lambda_optimal)
-
-# predict
-pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(RBC_tfsd ~.,df_bin1)
-                                 [-train.set,-1], s=cv.lasso$lambda.min,
-                                 type = "response"))
-
-# create ROC curve
-myroc <- roc(RBC_tfsd ~ pred.lasso, data=df_bin1[-train.set,])
-auc.lasso <- myroc$auc
-plot(myroc)
-auc.lasso
-coefficients(lasso.model)
-### WE SHOULD REALLY BOOTSTRAP THE LASSO ###
-
+# Calculate the average AUC
+average_auc <- mean(auc_values)
+se_auc <- sd(auc_values) / sqrt(n_iterations)
+list(average_auc = average_auc, SE = se_auc)
 
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF PLT TRANSFUSION WILL OCCUR ###
 ################################################################
 df_bin2 <- df_bin[,c(-23,-25,-26)]
-train.set <- sample(nrow(df_bin2),round(nrow(df_bin2)*.7))
+set.seed(123) # for reproducibility
+n_iterations <- 100
+auc_values <- numeric(n_iterations)
 
-# train predictor 
-x.train <- model.matrix(PLT_tfsd ~.,df_bin2)[train.set,-1]
-# train response
-y.train <- df_bin2$PLT_tfsd[train.set]
-# Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
-                      type.measure = "auc")
+for(i in 1:n_iterations) {
+  # Sample the data
+  train.set <- sample(nrow(df_bin2), round(nrow(df_bin2) * 0.7), replace = TRUE)
+  
+  # Train predictor
+  x.train <- model.matrix(PLT_tfsd ~., df_bin2)[train.set, -1]
+  # Train response
+  y.train <- df_bin2$PLT_tfsd[train.set]
+  
+  # Perform cross-validation for lambda selection
+  cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial", type.measure = "auc")
+  
+  lambda_optimal <- cv.lasso$lambda.min
+  lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1, lambda = lambda_optimal)
+  
+  # Predict
+  pred.lasso <- as.numeric(predict(lasso.model, 
+                                   newx = model.matrix(PLT_tfsd ~., df_bin2)[-train.set, -1], 
+                                   s = cv.lasso$lambda.min, 
+                                   type = "response"))
+  
+  # Create ROC curve
+  myroc <- roc(response = df_bin2$PLT_tfsd[-train.set], predictor = pred.lasso)
+  auc_values[i] <- myroc$auc
+}
 
-lambda_optimal <- cv.lasso$lambda.min
-lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
-                      lambda = lambda_optimal)
-
-# predict
-pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(PLT_tfsd ~.,df_bin2)
-                                 [-train.set,-1], s=cv.lasso$lambda.min,
-                                 type = "response"))
-
-# create ROC curve
-myroc <- roc(PLT_tfsd ~ pred.lasso, data=df_bin2[-train.set,])
-auc.lasso <- myroc$auc
-plot(myroc)
-auc.lasso
-coefficients(lasso.model)
+average_auc <- mean(auc_values)
+se_auc <- sd(auc_values) / sqrt(n_iterations)
+list(average_auc = average_auc, SE = se_auc)
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF FFP TRANSFUSION WILL OCCUR ###
 ################################################################
 df_bin3 <- df_bin[,c(-23,-24,-26)]
-train.set <- sample(nrow(df_bin3),round(nrow(df_bin3)*.7))
+set.seed(123) # for reproducibility
+n_iterations <- 100
+auc_values <- numeric(n_iterations)
 
-# train predictor 
-x.train <- model.matrix(FFP_tfsd ~.,df_bin3)[train.set,-1]
-# train response
-y.train <- df_bin3$FFP_tfsd[train.set]
-# Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
-                      type.measure = "auc")
+for(i in 1:n_iterations) {
+  # Sample the data
+  train.set <- sample(nrow(df_bin3), round(nrow(df_bin3) * 0.7), replace = TRUE)
+  
+  # Train predictor
+  x.train <- model.matrix(FFP_tfsd ~., df_bin3)[train.set, -1]
+  # Train response
+  y.train <- df_bin3$FFP_tfsd[train.set]
+  
+  # Perform cross-validation for lambda selection
+  cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial", type.measure = "auc")
+  
+  lambda_optimal <- cv.lasso$lambda.min
+  lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1, lambda = lambda_optimal)
+  
+  # Predict
+  pred.lasso <- as.numeric(predict(lasso.model, 
+                                   newx = model.matrix(FFP_tfsd ~., df_bin3)[-train.set, -1], 
+                                   s = cv.lasso$lambda.min, 
+                                   type = "response"))
+  
+  # Create ROC curve
+  myroc <- roc(response = df_bin3$FFP_tfsd[-train.set], predictor = pred.lasso)
+  auc_values[i] <- myroc$auc
+}
 
-lambda_optimal <- cv.lasso$lambda.min
-lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
-                      lambda = lambda_optimal)
-
-# predict
-pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(FFP_tfsd ~.,df_bin3)
-                                 [-train.set,-1], s=cv.lasso$lambda.min,
-                                 type = "response"))
-
-# create ROC curve
-myroc <- roc(FFP_tfsd ~ pred.lasso, data=df_bin3[-train.set,])
-auc.lasso <- myroc$auc
-plot(myroc)
-auc.lasso
-coefficients(lasso.model)
+average_auc <- mean(auc_values[1:50])
+se_auc <- sd(auc_values) / sqrt(n_iterations)
+list(average_auc = average_auc, SE = se_auc)
 #################################################################
 ### LASSO MODEL FOR PREDICTING IF CRYO TRANSFUSION WILL OCCUR ###
 #################################################################
 df_bin4 <- df_bin[,c(-23,-24,-25)]
-train.set <- sample(nrow(df_bin4),round(nrow(df_bin4)*.7))
+set.seed(123) # for reproducibility
+n_iterations <- 100
+auc_values <- numeric(n_iterations)
 
-# train predictor 
-x.train <- model.matrix(Cryo_tfsd ~.,df_bin4)[train.set,-1]
-# train response
-y.train <- df_bin4$Cryo_tfsd[train.set]
-# Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
-                      type.measure = "auc")
+for(i in 1:n_iterations) {
+  # Sample the data
+  train.set <- sample(nrow(df_bin4), round(nrow(df_bin4) * 0.7), replace = TRUE)
+  
+  # Train predictor
+  x.train <- model.matrix(Cryo_tfsd ~., df_bin4)[train.set, -1]
+  # Train response
+  y.train <- df_bin4$Cryo_tfsd[train.set]
+  
+  # Perform cross-validation for lambda selection
+  cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial", type.measure = "auc")
+  
+  lambda_optimal <- cv.lasso$lambda.min
+  lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1, lambda = lambda_optimal)
+  
+  # Predict
+  pred.lasso <- as.numeric(predict(lasso.model, 
+                                   newx = model.matrix(Cryo_tfsd ~., df_bin4)[-train.set, -1], 
+                                   s = cv.lasso$lambda.min, 
+                                   type = "response"))
+  
+  # Create ROC curve
+  myroc <- roc(response = df_bin4$Cryo_tfsd[-train.set], predictor = pred.lasso)
+  auc_values[i] <- myroc$auc
+}
 
-lambda_optimal <- cv.lasso$lambda.min
-lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
-                      lambda = lambda_optimal)
-
-# predict
-pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(Cryo_tfsd ~.,df_bin4)
-                                 [-train.set,-1], s=cv.lasso$lambda.min,
-                                 type = "response"))
-
-# create ROC curve
-myroc <- roc(Cryo_tfsd ~ pred.lasso, data=df_bin4[-train.set,])
-auc.lasso <- myroc$auc
-plot(myroc)
-auc.lasso
-coefficients(lasso.model)
+average_auc <- mean(auc_values[1:50])
+se_auc <- sd(auc_values) / sqrt(n_iterations)
+list(average_auc = average_auc, SE = se_auc)
 
 #########################################################
 ### WHY USE A MULTIVARIATE MODEL OVER INDIVIDUAL ONES ###
@@ -259,6 +283,8 @@ df_mvar <- df_mvar %>%
 df_mvar <- df_mvar %>%
   na.omit()
 
+# START OF MODEL #
+set.seed(123)
 train.set <- sample(nrow(df_mvar),round(nrow(df_mvar)*.7))
 
 # train predictor 
@@ -303,24 +329,38 @@ mse
 ###########################################################
 ### DECISION REGRESSION TREE FOR RBC TRANSFUSION AMOUNT ###
 ###########################################################
+df_tree1 <- df[,c(3:26,28,29,57,60:62)]
+df_tree1[c(1,2,7:16,25:26)] <- lapply(df_tree1[c(1,2,7:16,25:26)], factor)
+
 # Splitting the data into training and test sets
 set.seed(123) # for reproducibility
-index <- createDataPartition(df_mvar$Total.24hr.RBC, p = 0.8, list = FALSE)
-train_set <- df_mvar[index, ]
-test_set <- df_mvar[-index, ]
+num_iterations <- 100
+mse_values <- numeric(num_iterations) # To store MSE values
 
-fit <- rpart(Total.24hr.RBC  ~ . - Total.24hr.Plt -
-               Total.24hr.FFP - Total.24hr.Cryo,  
-             method = "anova", data = train_set) 
+for(i in 1:num_iterations) {
+  # Bootstrapped sampling for training data
+  boot_indexes <- sample(nrow(df_tree1), size = round(nrow(df_tree1) * 0.7), replace = TRUE)
+  test_indexes <- setdiff(1:nrow(df_tree1), boot_indexes)
+  
+  train_set <- df_tree1[boot_indexes, ]
+  test_set <- df_tree1[test_indexes, ]
+  
+  fit <- rpart(Total.24hr.RBC  ~ . - Total.24hr.Plt - Total.24hr.FFP - Total.24hr.Cryo,  
+               method = "anova", data = df_tree1)
+  
+  predictions <- predict(fit, test_set)
+  
+  # Actual values from the test set
+  actual_values <- test_set$Total.24hr.RBC
+  
+  # Calculate MSE on the test set
+  mse_values[i] <- postResample(pred = predictions, obs = actual_values)['RMSE']^2
+}
 
-predictions <- predict(fit, test_set)
+mean_mse <- mean(mse_values)
+se_mse <- sd(mse_values) / sqrt(length(mse_values))
 
-# Actual values from the test set
-actual_values <- test_set$Total.24hr.RBC
-
-# Calculate MSE on the test set
-mse <- postResample(pred = predictions, obs = actual_values)
-mse <- unname(mse['RMSE'])
+list(mean_mse = mean_mse, se_mse = se_mse)
 
 # Plot 
 plot(fit, uniform = TRUE)
@@ -335,7 +375,7 @@ plotcp(fit)
 optimal_cp <- fit$cptable[which.min(fit$cptable[, "xerror"]), "CP"]
 
 # Prune the tree
-pruned_fit <- prune(fit, cp = 0.032572)
+pruned_fit <- prune(fit, cp = 0.030878)
 
 # Plot the pruned tree
 rpart.plot(pruned_fit)
@@ -356,24 +396,35 @@ library(caret)
 library(rpart)
 library(rpart.plot)
 
-# Splitting the data into training and test sets
 set.seed(123) # for reproducibility
-index <- createDataPartition(df_mvar$Total.24hr.Plt, p = 0.8, list = FALSE)
-train_set <- df_mvar[index, ]
-test_set <- df_mvar[-index, ]
+num_iterations <- 100
+mse_values <- numeric(num_iterations) # To store MSE values
 
-fit <- rpart(Total.24hr.Plt  ~ . - Total.24hr.RBC -
-               Total.24hr.FFP - Total.24hr.Cryo,  
-             method = "anova", data = train_set) 
+for(i in 1:num_iterations) {
+  # Bootstrapped sampling for training data
+  boot_indexes <- sample(nrow(df_tree1), size = round(nrow(df_tree1) * 0.7), replace = TRUE)
+  test_indexes <- setdiff(1:nrow(df_tree1), boot_indexes)
+  
+  train_set <- df_tree1[boot_indexes, ]
+  test_set <- df_tree1[test_indexes, ]
+  
+  fit <- rpart(Total.24hr.Plt  ~ . - Total.24hr.RBC -
+                  Total.24hr.FFP - Total.24hr.Cryo,  
+                method = "anova", data = train_set)
+  
+  predictions <- predict(fit, test_set)
+  
+  # Actual values from the test set
+  actual_values <- test_set$Total.24hr.Plt
+  
+  # Calculate MSE on the test set
+  mse_values[i] <- postResample(pred = predictions, obs = actual_values)['RMSE']^2
+}
 
-predictions <- predict(fit, test_set)
+mean_mse <- mean(mse_values)
+se_mse <- sd(mse_values) / sqrt(length(mse_values))
 
-# Actual values from the test set
-actual_values <- test_set$Total.24hr.Plt
-
-# Calculate MSE on the test set
-mse <- postResample(pred = predictions, obs = actual_values)
-mse <- unname(mse['RMSE'])
+list(mean_mse = mean_mse, se_mse = se_mse)
 
 # Plot 
 plot(fit, uniform = TRUE)
@@ -388,7 +439,7 @@ plotcp(fit)
 optimal_cp <- fit$cptable[which.min(fit$cptable[, "xerror"]), "CP"]
 
 # Prune the tree
-pruned_fit <- prune(fit, cp = 0.045798)
+pruned_fit <- prune(fit, cp = 0.018)
 
 # Plot the pruned tree
 rpart.plot(pruned_fit)
@@ -404,28 +455,36 @@ pruned_mse
 ###########################################################
 ### DECISION REGRESSION TREE FOR FFP TRANSFUSION AMOUNT ###
 ###########################################################
-library(caret)
-library(rpart)
-library(rpart.plot)
-
-# Splitting the data into training and test sets
 set.seed(123) # for reproducibility
-index <- createDataPartition(df_mvar$Total.24hr.Plt, p = 0.8, list = FALSE)
-train_set <- df_mvar[index, ]
-test_set <- df_mvar[-index, ]
+num_iterations <- 100
+mse_values <- numeric(num_iterations) # To store MSE values
 
-fit <- rpart(Total.24hr.FFP  ~ . - Total.24hr.RBC -
-               Total.24hr.Plt - Total.24hr.Cryo,  
-             method = "anova", data = train_set) 
+for(i in 1:num_iterations) {
+  # Bootstrapped sampling for training data
+  boot_indexes <- sample(nrow(df_tree1), size = round(nrow(df_tree1) * 0.7), replace = TRUE)
+  test_indexes <- setdiff(1:nrow(df_tree1), boot_indexes)
+  
+  train_set <- df_tree1[boot_indexes, ]
+  test_set <- df_tree1[test_indexes, ]
+  
+  fit <- rpart(Total.24hr.FFP  ~ . - Total.24hr.RBC -
+                  Total.24hr.Plt - Total.24hr.Cryo,  
+                method = "anova", data = train_set) 
+  
+  predictions <- predict(fit, test_set)
+  
+  # Actual values from the test set
+  actual_values <- test_set$Total.24hr.FFP
+  
+  # Calculate MSE on the test set
+  mse_values[i] <- postResample(pred = predictions, obs = actual_values)['RMSE']^2
+}
 
-predictions <- predict(fit, test_set)
+mean_mse <- mean(mse_values)
+se_mse <- sd(mse_values) / sqrt(length(mse_values))
 
-# Actual values from the test set
-actual_values <- test_set$Total.24hr.FFP
+list(mean_mse = mean_mse, se_mse = se_mse)
 
-# Calculate MSE on the test set
-mse <- postResample(pred = predictions, obs = actual_values)
-mse <- unname(mse['RMSE'])
 
 # Plot 
 plot(fit, uniform = TRUE)
@@ -440,7 +499,7 @@ plotcp(fit)
 optimal_cp <- fit$cptable[which.min(fit$cptable[, "xerror"]), "CP"]
 
 # Prune the tree
-pruned_fit <- prune(fit, cp = 0.076547)
+pruned_fit <- prune(fit, cp = 0.010000)
 
 # Plot the pruned tree
 rpart.plot(pruned_fit)
@@ -456,28 +515,37 @@ pruned_mse
 ############################################################
 ### DECISION REGRESSION TREE FOR CRYO TRANSFUSION AMOUNT ###
 ############################################################
-library(caret)
-library(rpart)
-library(rpart.plot)
-
-# Splitting the data into training and test sets
 set.seed(123) # for reproducibility
-index <- createDataPartition(df_mvar$Total.24hr.Cryo, p = 0.8, list = FALSE)
-train_set <- df_mvar[index, ]
-test_set <- df_mvar[-index, ]
+num_iterations <- 100
+mse_values <- numeric(num_iterations) # To store MSE values
 
-fit <- rpart(Total.24hr.Cryo  ~ . - Total.24hr.RBC -
-               Total.24hr.Plt - Total.24hr.FFP,  
-             method = "anova", data = train_set) 
+for(i in 1:num_iterations) {
+  # Bootstrapped sampling for training data
+  boot_indexes <- sample(nrow(df_tree1), size = round(nrow(df_tree1) * 0.7), replace = TRUE)
+  test_indexes <- setdiff(1:nrow(df_tree1), boot_indexes)
+  
+  train_set <- df_tree1[boot_indexes, ]
+  test_set <- df_tree1[test_indexes, ]
+  
+  fit <- rpart(Total.24hr.Cryo  ~ . - Total.24hr.RBC -
+                 Total.24hr.Plt - Total.24hr.FFP,  
+               method = "anova", data = train_set)  
+  
+  predictions <- predict(fit, test_set)
+  
+  # Actual values from the test set
+  actual_values <- test_set$Total.24hr.Cryo
+  
+  # Calculate MSE on the test set
+  mse_values[i] <- postResample(pred = predictions, obs = actual_values)['RMSE']^2
+}
 
-predictions <- predict(fit, test_set)
+mean_mse <- mean(mse_values)
+se_mse <- sd(mse_values) / sqrt(length(mse_values))
 
-# Actual values from the test set
-actual_values <- test_set$Total.24hr.Cryo
+list(mean_mse = mean_mse, se_mse = se_mse)
 
-# Calculate MSE on the test set
-mse <- postResample(pred = predictions, obs = actual_values)
-mse <- unname(mse['RMSE'])
+
 
 # Plot 
 plot(fit, uniform = TRUE)
@@ -492,7 +560,7 @@ plotcp(fit)
 optimal_cp <- fit$cptable[which.min(fit$cptable[, "xerror"]), "CP"]
 
 # Prune the tree
-pruned_fit <- prune(fit, cp = 0.053521)
+pruned_fit <- prune(fit, cp = 0.017310)
 
 # Plot the pruned tree
 rpart.plot(pruned_fit)
@@ -644,9 +712,48 @@ results_ffp
 results_cryo
 
 
-####################################################
-### BOOTSTRAPPING RBC LASSO CLASSIFICATION MODEL ###
-####################################################
+############################################
+### BOOTSTRAPPING LASSO REGRESSION MODEL ###
+############################################
+
+set.seed(123) # for reproducibility
+num_iterations <- 100
+num_outcomes <- 4 # Assuming there are 4 outcomes
+mse_values <- array(dim = c(num_iterations, num_outcomes)) # To store MSE values
+
+for(i in 1:num_iterations) {
+  boot_indexes <- sample(nrow(df_mvar), size = round(nrow(df_mvar) * 0.7), replace = TRUE)
+  test_indexes <- setdiff(1:nrow(df_mvar), boot_indexes)
+  
+  x.train <- model.matrix(Total.24hr.RBC + Total.24hr.Plt + Total.24hr.FFP + Total.24hr.Cryo ~., df_mvar)[boot_indexes, -1]
+  y.train <- model.matrix(~ df_mvar$Total.24hr.RBC + df_mvar$Total.24hr.FFP + df_mvar$Total.24hr.Plt + df_mvar$Total.24hr.Cryo)[boot_indexes, -1]
+  
+  cv.lasso <- cv.glmnet(x.train, y.train, nfolds = 3, alpha = 1, family = "mgaussian", type.measure = "mse")
+  lasso.model <- glmnet(x.train, y.train, family = "mgaussian", alpha = 1, lambda = cv.lasso$lambda.min)
+  
+  x.test <- model.matrix(Total.24hr.RBC + Total.24hr.Plt + Total.24hr.FFP + Total.24hr.Cryo ~., df_mvar)[test_indexes, -1]
+  y.test <- model.matrix(~ df_mvar$Total.24hr.RBC + df_mvar$Total.24hr.FFP + df_mvar$Total.24hr.Plt + df_mvar$Total.24hr.Cryo)[test_indexes, -1]
+  
+  pred.lasso <- predict(lasso.model, newx = x.test, s = cv.lasso$lambda.min)
+  pred.lasso <- matrix(pred.lasso, ncol = ncol(y.test))  # Reshape if necessary
+  
+  if(is.matrix(y.test) && is.matrix(pred.lasso)) {
+    # Calculate MSE for each column (variable) and take the mean
+    mse_values[i] <- mean(colMeans((pred.lasso - y.test)^2))
+  } else {
+    mse_values[i] <- mean((pred.lasso - y.test)^2)
+  }
+  
+  for(j in 1:num_outcomes) {
+    mse_values[i, j] <- mean((pred.lasso[, j] - y.test[, j])^2)
+  }
+}
+
+# Calculating the mean and standard error of MSE for each outcome
+mean_mse <- colMeans(mse_values)
+se_mse <- apply(mse_values, 2, function(x) sd(x) / sqrt(length(x)))
+
+list(mean_mse = mean_mse, se_mse = se_mse)
 
 
 
