@@ -8,6 +8,11 @@ library(glmnet)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
+library(pROC)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(car)
 set.seed(123)
 
 # create df_bin, bin stands for binary classification
@@ -16,80 +21,71 @@ df <- df %>% mutate("RBC_tfsd" = case_when(`Total.24hr.RBC` == 0 ~ 0, TRUE ~ 1))
              mutate("FFP_tfsd" = case_when(`Total.24hr.FFP` == 0 ~ 0, TRUE ~ 1)) %>%
              mutate("Cryo_tfsd" = case_when(`Total.24hr.Cryo` == 0 ~ 0, TRUE ~ 1))
   
-### THIS DF WILL ONLY WORK FOR RBC, NEED TO ADD NEW COLUMNS 64:66 FOR PLT, FFP, CRYO
 df_bin <- df[,c(3:26,28,29,63:66)]
+df_bin[c(3:6,17:24)] <- scale(df_bin[c(3:6,17:24)])
 
-correlation_matrix <- cor(df_bin)
-find_high_correlations <- function(cor_matrix, threshold) {
-  cor_matrix[lower.tri(cor_matrix, diag = TRUE)] <- NA
-  high_correlations <- which(abs(cor_matrix) > threshold, arr.ind = TRUE)
-  return(data.frame(Variable1 = rownames(cor_matrix)[high_correlations[, 1]],
-                    Variable2 = colnames(cor_matrix)[high_correlations[, 2]],
-                    Correlation = cor_matrix[high_correlations]))
-}
+####################################################
+### Meeting Assumptions for Lasso Classification ###
+####################################################
 
-# Set your correlation threshold
-threshold <- 0.7
+# 1) Outcome is binary: Yes
+# 2) Independence of Datapoints: Yes via study ID
+# 3) Multicollinearity:
+vif(lm(RBC_tfsd ~ ., data = df_bin))
+# Remove Height and Weight due to high ViF, keep BMI
+df_bin <- df_bin[,c(-3,-4)]
+# Check ViF again
+vif(lm(RBC_tfsd ~ ., data = df_bin))
+# Remove Pre_PT bc Pre_INR measures it better and Hb because Hct is percentage of Hb in blood
+df_bin <- df_bin[,c(-16,-19)]
+# Check ViF again
+vif(lm(RBC_tfsd ~ ., data = df_bin))
+# 4) Scaled variables
+df_bin[c(1,2,5:14,21:26)] <- lapply(df_bin[c(1,2,5:14,21:26)], factor)
+# 5) Continuous Predictors are normally distributed
+# 6) Continuous Predictors have homoscedasticity
+# 7) Removal of outliers
+Q1 <- quantile(df_bin$LAS.score, 0.25)
+Q3 <- quantile(df_bin$LAS.score, 0.75)
+IQR <- Q3 - Q1
+LB <- Q1 - 1.5 * IQR
+UB <- Q3 + 1.5 * IQR
 
-# Find and display correlated variable pairs
-high_corr_pairs <- find_high_correlations(correlation_matrix, threshold)
-print(high_corr_pairs)
+# Remove outliers
+df_bin <- df_bin %>% filter(LAS.score >= LB & LAS.score <= UB)
+
+Q1 <- quantile(df_bin$Pre_INR, 0.25)
+Q3 <- quantile(df_bin$Pre_INR, 0.75)
+IQR <- Q3 - Q1
+LB <- Q1 - 1.5 * IQR
+UB <- Q3 + 1.5 * IQR
+
+# Remove outliers
+df_bin <- df_bin %>% filter(Pre_INR >= LB & Pre_INR <= UB)
+
+Q1 <- quantile(df_bin$Pre_PTT, 0.25)
+Q3 <- quantile(df_bin$Pre_PTT, 0.75)
+IQR <- Q3 - Q1
+LB <- Q1 - 1.5 * IQR
+UB <- Q3 + 1.5 * IQR
+
+# Remove outliers
+df_bin <- df_bin %>% filter(Pre_PTT >= LB & Pre_PTT <= UB)
 
 
-
-# heatmap
-ggplot(data = melt(correlation_matrix), aes(Var1, Var2, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient(low = "blue", high = "red") +  # Choose your color palette
-  theme_minimal() +
-  labs(title = "Correlation Matrix Heatmap")
-
-df_bin[c(1, 2, 7:16, 25:26)] <- lapply(df_bin[c(1, 2, 7:16, 25:26)], factor)
-
-######################################################
-### LASSO MODEL FOR PREDICTING MASSIVE TRANSFUSION ###
-######################################################
-df_massive <- df[,c(3:26,28,29,58)]
-df_massive[c(1, 2, 7:16, 25:26)] <- lapply(df_massive[c(1, 2, 7:16, 25:26)], factor)
-library(pROC)
-library(glmnet)
-train.set <- sample(nrow(df_massive),round(nrow(df_bin)*.7))
-
-# train predictor 
-x.train <- model.matrix(Massive.Transfusion ~.,df_massive)[train.set,-1]
-# train response
-y.train <- df_massive$Massive.Transfusion[train.set]
-# Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
-                      type.measure = "auc")
-
-lambda_optimal <- cv.lasso$lambda.min
-lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
-                      lambda = lambda_optimal)
-
-# predict
-pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(Massive.Transfusion ~.,df_massive)
-                                 [-train.set,-1], s=cv.lasso$lambda.min,
-                                 type = "response"))
-
-# create ROC curve
-myroc <- roc(Massive.Transfusion ~ pred.lasso, data=df_massive[-train.set,])
-auc.lasso <- myroc$auc
-plot(myroc)
-
+library(DataExplorer)
+create_report(df_bin)
 
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF RBC TRANSFUSION WILL OCCUR ###
 ################################################################
-library(pROC)
-library(glmnet)
-train.set <- sample(nrow(df_bin),round(nrow(df_bin)*.7))
+df_bin1 <- df_bin[,c(-24,-25,-26)]
+train.set <- sample(nrow(df_bin1),round(nrow(df_bin1)*.7))
 
 # train predictor 
-x.train <- model.matrix(RBC_tfsd ~.,df_bin)[train.set,-1]
+x.train <- model.matrix(RBC_tfsd ~.,df_bin1)[train.set,-1]
 # train response
-y.train <- df_bin$RBC_tfsd[train.set]
+y.train <- df_bin1$RBC_tfsd[train.set]
 # Perform cross-validation for lambda selection
 cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
                       type.measure = "auc")
@@ -100,29 +96,29 @@ lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
 
 # predict
 pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(RBC_tfsd ~.,df_bin)
+                                 newx = model.matrix(RBC_tfsd ~.,df_bin1)
                                  [-train.set,-1], s=cv.lasso$lambda.min,
                                  type = "response"))
 
 # create ROC curve
-myroc <- roc(RBC_tfsd ~ pred.lasso, data=df_bin[-train.set,])
+myroc <- roc(RBC_tfsd ~ pred.lasso, data=df_bin1[-train.set,])
 auc.lasso <- myroc$auc
 plot(myroc)
-
+auc.lasso
+coefficients(lasso.model)
 ### WE SHOULD REALLY BOOTSTRAP THE LASSO ###
 
 
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF PLT TRANSFUSION WILL OCCUR ###
 ################################################################
-library(pROC)
-library(glmnet)
-train.set <- sample(nrow(df_bin),round(nrow(df_bin)*.7))
+df_bin2 <- df_bin[,c(-23,-25,-26)]
+train.set <- sample(nrow(df_bin2),round(nrow(df_bin2)*.7))
 
 # train predictor 
-x.train <- model.matrix(PLT_tfsd ~.,df_bin)[train.set,-1]
+x.train <- model.matrix(PLT_tfsd ~.,df_bin2)[train.set,-1]
 # train response
-y.train <- df_bin$PLT_tfsd[train.set]
+y.train <- df_bin2$PLT_tfsd[train.set]
 # Perform cross-validation for lambda selection
 cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
                       type.measure = "auc")
@@ -133,26 +129,26 @@ lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
 
 # predict
 pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(PLT_tfsd ~.,df_bin)
+                                 newx = model.matrix(PLT_tfsd ~.,df_bin2)
                                  [-train.set,-1], s=cv.lasso$lambda.min,
                                  type = "response"))
 
 # create ROC curve
-myroc <- roc(PLT_tfsd ~ pred.lasso, data=df_bin[-train.set,])
+myroc <- roc(PLT_tfsd ~ pred.lasso, data=df_bin2[-train.set,])
 auc.lasso <- myroc$auc
 plot(myroc)
-
+auc.lasso
+coefficients(lasso.model)
 ################################################################
 ### LASSO MODEL FOR PREDICTING IF FFP TRANSFUSION WILL OCCUR ###
 ################################################################
-library(pROC)
-library(glmnet)
-train.set <- sample(nrow(df_bin),round(nrow(df_bin)*.7))
+df_bin3 <- df_bin[,c(-23,-24,-26)]
+train.set <- sample(nrow(df_bin3),round(nrow(df_bin3)*.7))
 
 # train predictor 
-x.train <- model.matrix(FFP_tfsd ~.,df_bin)[train.set,-1]
+x.train <- model.matrix(FFP_tfsd ~.,df_bin3)[train.set,-1]
 # train response
-y.train <- df_bin$PLT_tfsd[train.set]
+y.train <- df_bin3$FFP_tfsd[train.set]
 # Perform cross-validation for lambda selection
 cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
                       type.measure = "auc")
@@ -163,26 +159,26 @@ lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
 
 # predict
 pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(FFP_tfsd ~.,df_bin)
+                                 newx = model.matrix(FFP_tfsd ~.,df_bin3)
                                  [-train.set,-1], s=cv.lasso$lambda.min,
                                  type = "response"))
 
 # create ROC curve
-myroc <- roc(FFP_tfsd ~ pred.lasso, data=df_bin[-train.set,])
+myroc <- roc(FFP_tfsd ~ pred.lasso, data=df_bin3[-train.set,])
 auc.lasso <- myroc$auc
 plot(myroc)
-
+auc.lasso
+coefficients(lasso.model)
 #################################################################
 ### LASSO MODEL FOR PREDICTING IF CRYO TRANSFUSION WILL OCCUR ###
 #################################################################
-library(pROC)
-library(glmnet)
-train.set <- sample(nrow(df_bin),round(nrow(df_bin)*.7))
+df_bin4 <- df_bin[,c(-23,-24,-25)]
+train.set <- sample(nrow(df_bin4),round(nrow(df_bin4)*.7))
 
 # train predictor 
-x.train <- model.matrix(Cryo_tfsd ~.,df_bin)[train.set,-1]
+x.train <- model.matrix(Cryo_tfsd ~.,df_bin4)[train.set,-1]
 # train response
-y.train <- df_bin$PLT_tfsd[train.set]
+y.train <- df_bin4$Cryo_tfsd[train.set]
 # Perform cross-validation for lambda selection
 cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "binomial",
                       type.measure = "auc")
@@ -193,15 +189,16 @@ lasso.model <- glmnet(x.train, y.train, family = "binomial", alpha = 1,
 
 # predict
 pred.lasso <- as.numeric(predict(lasso.model, 
-                                 newx = model.matrix(FFP_tfsd ~.,df_bin)
+                                 newx = model.matrix(Cryo_tfsd ~.,df_bin4)
                                  [-train.set,-1], s=cv.lasso$lambda.min,
                                  type = "response"))
 
 # create ROC curve
-myroc <- roc(FFP_tfsd ~ pred.lasso, data=df_bin[-train.set,])
+myroc <- roc(Cryo_tfsd ~ pred.lasso, data=df_bin4[-train.set,])
 auc.lasso <- myroc$auc
 plot(myroc)
-
+auc.lasso
+coefficients(lasso.model)
 
 #########################################################
 ### WHY USE A MULTIVARIATE MODEL OVER INDIVIDUAL ONES ###
@@ -230,7 +227,37 @@ ggplot(data = cor_matrix_long, aes(Var1, Var2, fill = value, label = round(value
 set.seed(123)
 # create df_mvar, nvar stands for dataset for multivariate regression
 df_mvar <- df[,c(3:26,28,29,57,60:62)]
-df_mvar[c(1, 2, 7:16, 25:26)] <- lapply(df_mvar[c(1, 2, 7:16, 25:26)], factor)
+# remove multicollinearity vars
+df_mvar <- df_mvar[,c(-3,-4, -18, -21)]
+# check vif
+vif(lm(Total.24hr.RBC + Total.24hr.Plt + Total.24hr.FFP + Total.24hr.Cryo ~ ., data = df_mvar))
+# good
+
+df_mvar[c(1, 2, 5:14, 21:22)] <- lapply(df_mvar[c(1, 2, 5:14, 21:22)], factor)
+
+# Function to remove outliers from a numeric vector
+remove_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25)
+  Q3 <- quantile(x, 0.75)
+  IQR <- Q3 - Q1
+  LB <- Q1 - 1.5 * IQR
+  UB <- Q3 + 1.5 * IQR
+  x_filtered <- ifelse(x < LB | x > UB, NA, x)
+  return(x_filtered)
+}
+
+excluded_columns <- c(1,2,5:14,21:26)
+
+# Apply the function to numeric columns excluding the specified ones
+df_mvar <- df_mvar %>%
+  mutate(across(
+    .cols = -all_of(excluded_columns),
+    .fns = list(remove_outliers)
+  ))
+
+# Remove rows with NA values (outliers)
+df_mvar <- df_mvar %>%
+  na.omit()
 
 train.set <- sample(nrow(df_mvar),round(nrow(df_mvar)*.7))
 
@@ -241,11 +268,11 @@ y.train <- model.matrix(~ df_mvar$Total.24hr.RBC + df_mvar$Total.24hr.FFP +
                         df_mvar$Total.24hr.Plt + df_mvar$Total.24hr.Cryo)[train.set, -1]
 
 # Perform cross-validation for lambda selection
-cv.lasso <- cv.glmnet(x.train, y.train, alpha = 1, family = "mgaussian",
+cv.lasso <- cv.glmnet(x.train, y.train, nfolds = 3, alpha = 1, family = "mgaussian",
                       type.measure = "mse")
 lambda_optimal <- cv.lasso$lambda.min
 lasso.model <- glmnet(x.train, y.train, family = "mgaussian", alpha = 1,
-                      lambda = lambda_optimal + 1)
+                      lambda = lambda_optimal)
 
 
 plot(cv.lasso)
@@ -265,53 +292,17 @@ y.test <- model.matrix(~ df_mvar$Total.24hr.RBC + df_mvar$Total.24hr.FFP +
 
 # Calculate MSE
 mse <- colMeans((pred.lasso - y.test)^2)
-
+mse
 
 ################################
 ### RANDOM FOREST REGRESSION ###
 ################################
-library(randomForest)
-library(ggplot2)
 
-rf.fit1 <- randomForest(Total.24hr.RBC + Total.24hr.Plt + 
-                       Total.24hr.FFP + Total.24hr.Cryo ~ ., data=df_mvar, ntree=1000,
-                       keep.forest=FALSE, importance=TRUE)
-
-ImpData <- as.data.frame(importance(rf.fit1))
-ImpData$Var.Names <- row.names(ImpData)
-
-ggplot(ImpData, aes(x=Var.Names, y=`%IncMSE`)) +
-  geom_segment( aes(x=Var.Names, xend=Var.Names, y=0, yend=`%IncMSE`), color="skyblue") +
-  geom_point(aes(size = IncNodePurity), color="blue", alpha=0.6) +
-  theme_light() +
-  coord_flip() +
-  theme(
-    legend.position="bottom",
-    panel.grid.major.y = element_blank(),
-    panel.border = element_blank(),
-    axis.ticks.y = element_blank()
-  )
-
-# remove variables to decrease MSE 
-df_rfr <- df_mvar[,c(-5,-8,-10,-24,-12,-1)]
-
-rf.fit2 <- randomForest(Total.24hr.RBC + Total.24hr.Plt + 
-                         Total.24hr.FFP + Total.24hr.Cryo ~ ., data=df_rfr, ntree=1000,
-                       keep.forest=TRUE, importance=TRUE)
-
-single_tree <- getTree(rf.fit2, k = 1, labelVar=TRUE)
-
-ggplot(single_tree) +
-  geom_point(aes(x = `split var`, y = `split point`))
 
 
 ###########################################################
 ### DECISION REGRESSION TREE FOR RBC TRANSFUSION AMOUNT ###
 ###########################################################
-library(caret)
-library(rpart)
-library(rpart.plot)
-
 # Splitting the data into training and test sets
 set.seed(123) # for reproducibility
 index <- createDataPartition(df_mvar$Total.24hr.RBC, p = 0.8, list = FALSE)
@@ -651,3 +642,13 @@ results_rbc
 results_plt
 results_ffp
 results_cryo
+
+
+####################################################
+### BOOTSTRAPPING RBC LASSO CLASSIFICATION MODEL ###
+####################################################
+
+
+
+
+
