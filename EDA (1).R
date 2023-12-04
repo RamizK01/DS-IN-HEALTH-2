@@ -66,8 +66,11 @@ data()
 
 # QUESTION 2: 
 
-df$Survival_Time <- ifelse(is.na(df$Survival_Time), 365, df$Survival_Time )
+# Remove NA values in Survival_Time function
+# Since analysis is performed 12 months post-surgery, NA values were converted to 365 days survival time. 
+df$Survival_Time <- ifelse(is.na(df$Survival_Time), 365, df$Survival_Time)
 
+# Convert status variables to binary
 data1$ALIVE_30DAYS_YN <- as.factor(data1$ALIVE_30DAYS_YN)
 data1$ALIVE_30DAYS_YN <- ifelse(data1$ALIVE_30DAYS_YN == "Y", 1, 0)
 data1$ALIVE_90DAYS_YN <- as.factor(data1$ALIVE_90DAYS_YN)
@@ -79,15 +82,14 @@ df$ALIVE_12MTHS_YN <- ifelse(df$ALIVE_12MTHS_YN == "Y", 1, 0)
 df$DEATH_DATE <- as.numeric(df$DEATH_DATE)
 df$DEATH_DATE <- ifelse(is.na(df$DEATH_DATE), 0, 1)
 
-
+# Factorize RBC transfusion variable
 df$RBC_tfsd <- as.factor(df$RBC_tfsd)
 
 # Survival Curve - Mortality and RBC_tfsd
 
 sf1 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data = df)
 print(sf1)
-
-plot(sf1, col = 1:2)
+plot(sf1, col = 1:2, ylim = c(0.8, 1), xlab = "Days from Surgery", ylab = "Survival", main = "Survival Probability based on RBC Transfusion")
 legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 
 # typical stratified KM curve
@@ -95,6 +97,9 @@ plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df), fun
 
 # plot a cloglog plot against log(t)
 plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
+
+# Perform log-rank test
+survdiff(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df)
 
 # Cox PH model
 coxmod1 <- coxph(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data = df)
@@ -106,17 +111,17 @@ cox.zph(coxmod1)
 # Can make a composite variable, choosing a cutoff for duration of ICU stay in days for status. 
 # ICU stays longer than 4 are typically considered long
 
-df$Long_ICU_Stay <- ifelse(df$Duration.of.ICU.Stay..days. > 4, 1, 0)
+df$Long_ICU_Stay <- ifelse(df$Duration.of.ICU.Stay..days. > 7, 1, 0)
 
 sf2 <- survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data = df)
 print(sf2)
-plot(sf2, col = 1:2, xlim = c(0,20))
-
+plot(sf2, col = 1:2, xlim = c(0,20), main = "Duration of ICU Stay based on RBC Transfusion", xlab = "ICU Time in Days", ylab = "Probability of ICU Discharge")
 legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 
 # typical stratified KM curve
 plot(survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data=df), fun = "S")
 # Doesnt meet PH assumptions 
+
 # plot a cloglog plot against log(t)
 plot(survfit(Surv(Duration.of.ICU.Stay..days., Long_ICU_Stay == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
 
@@ -126,29 +131,6 @@ summary(coxmod2)
 
 cox.zph(coxmod2)
 
-# Survival curve 4 - Length of Hospital stay
-# Create composite variable for long hospital stay
-# typical for lung transplant patients is 3-4 weeks, so ill choose 30 days as a cutoff
-
-df$Long_Hospital_Stay <- ifelse(df$HOSPITAL_LOS > 30, 1, 0)
-
-sf4 <- survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
-print(sf4)
-plot(sf4, col = 1:2, xlim = c(0,35))
-
-legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
-
-# typical stratified KM curve
-plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "S")
-# Doesnt meet PH assumptions 
-# plot a cloglog plot against log(t)
-plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
-
-# Cox PH model
-coxmod4 <- coxph(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
-summary(coxmod4)
-
-cox.zph(coxmod4)
 
 # Survival Curve 3 -  Mortality and FFP_tfsd
 sf3 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data = df)
@@ -163,11 +145,40 @@ plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FPP_tfsd, data=df), fun
 # plot a cloglog plot against log(t)
 plot(survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data=df), fun = "cloglog")
 
+# Perform log-rank test
+survdiff(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df)
+
 # Cox PH model
 coxmod3 <- coxph(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ FFP_tfsd, data = df)
 summary(coxmod3)
 
 cox.zph(coxmod3)
+
+# Survival curve 4 - Length of Hospital stay
+# Create composite variable for long hospital stay
+# typical for lung transplant patients is 3-4 weeks, so ill choose 30 days as a cutoff
+
+df$Long_Hospital_Stay <- ifelse(df$HOSPITAL_LOS > 30, 1, 0)
+
+sf4 <- survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
+print(sf4)
+plot(sf4, col = 1:2, xlim = c(8,35), main = "Duration of Hospital Stay based on RBC Transfusion", xlab = "Length of Hospital Stay (Days)", ylab = "Probability of Hospital Discharge")
+legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
+
+# typical stratified KM curve
+plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "S")
+# Doesnt meet PH assumptions 
+# plot a cloglog plot against log(t)
+plot(survfit(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data=df), fun = "cloglog")
+
+# Perform log-rank test
+survdiff(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ RBC_tfsd, data=df)
+
+# Cox PH model
+coxmod4 <- coxph(Surv(HOSPITAL_LOS, Long_Hospital_Stay == 0) ~ RBC_tfsd, data = df)
+summary(coxmod4)
+
+cox.zph(coxmod4)
 
 # Survival Curve 5 -  Mortality and Plt_tfsd
 sf5 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ Plt_Tfsd, data = df)
@@ -212,14 +223,12 @@ summary(coxmod6)
 cox.zph(coxmod6)
 
 # Survival Curve 7 - Mortality and any one of FFP, Cryo, Plt
-
 # create composite variable
 df$Other_transfusion <- ifelse(df$Plt_Tfsd == 1 | df$Cryo_tfsd == 1 | df$FFP_tfsd == 1, 1, 0)
-
 sf7 <- survfit(Surv(Survival_Time, ALIVE_12MTHS_YN == 0) ~ Other_transfusion, data = df)
 print(sf7)
 
-plot(sf7, col = 1:2)
+plot(sf7, col = 1:2, ylim = c(0.6,1), xlab = "Days from Surgery", ylab = "Survival", main = "Survival Probability based on any Transfusion")
 legend("bottomright", legend = c("No Transfusion", "Transfusion"), lty = 1, col = 1:2) 
 # bad curve
 
