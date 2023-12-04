@@ -1,4 +1,3 @@
-
 ############## Massive Transfusions ###################
 # Load necessary libraries
 library(e1071)
@@ -14,6 +13,9 @@ set.seed(123)
 
 #take out some variables 
 SVM_df <- cleaned_transfusion_data[, c(-1, -2, -27, -(30:57), -(59:62) )]
+
+# scale numerical variables
+SVM_df[,c(3:6,17:24)] <- scale(SVM_df[,c(3:6,17:24)])
 
 index <- createDataPartition(SVM_df$Massive.Transfusion, p = 0.8, list = FALSE)
 
@@ -126,26 +128,15 @@ predictions <- predict(svm_model, test_scaled)
 # Evaluate model
 confusionMatrix(predictions, test_scaled$binary.Total.24hr.RBC)
 
-# CALCULATE AUC
+# AUC CALCULATION
 library(pROC)
 
-# Retrain SVM model with probability predictions
-svm_model_prob <- svm(binary.Total.24hr.RBC ~ ., data = train_scaled, type = 'C-classification', 
-                      kernel = 'radial', cost = best_model$cost, gamma = best_model$gamma, 
-                      probability = TRUE)
+# Extract decision values
+decision_values <- attr(prob_predictions, "decision.values")[, 1]
 
-# Predict probabilities on test data
-prob_predictions <- predict(svm_model_prob, test_scaled, probability = TRUE)
-
-# Extract the probabilities for the positive class
-probabilities <- attr(prob_predictions, "probabilities")[,2]
-
-# Calculate the AUC
-roc_curve <- roc(test_scaled$binary.Total.24hr.RBC, probabilities)
-auc_value <- auc(roc_curve)
-
-# Print the AUC value
-print(auc_value)
+# Calculate ROC and AUC
+roc_response <- roc(response = test_scaled$binary.Total.24hr.RBC, predictor = decision_values)
+auc(roc_response)
 
 
 ##### Binary Total 24hr Plt ########

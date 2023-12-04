@@ -191,7 +191,7 @@ list(average_auc = average_auc, SE = se_auc)
 #################################################################
 df_bin4 <- df_bin[,c(-23,-24,-25)]
 set.seed(123) # for reproducibility
-n_iterations <- 100
+n_iterations <- 50
 auc_values <- numeric(n_iterations)
 
 for(i in 1:n_iterations) {
@@ -282,6 +282,9 @@ df_mvar <- df_mvar %>%
 # Remove rows with NA values (outliers)
 df_mvar <- df_mvar %>%
   na.omit()
+
+library(DataExplorer)
+create_report(df)
 
 # START OF MODEL #
 set.seed(123)
